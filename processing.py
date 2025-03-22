@@ -139,23 +139,32 @@ def process_local_subtitle(season_folder, entry_json_path=None, season_number=1)
 
 def process_media_files(season_folder, season_number=1):
     """
-    Process media files (audio.m4s and video.m4s) in the 112 folder.
+    Process media files (audio.m4s and video.m4s) using the preferred video quality folder.
     Simply copies the files to the output directory with TV show naming convention.
     """
-    media_folder = os.path.join(season_folder, MEDIA_FOLDER_NAME)
-    if not os.path.exists(media_folder):
-        message.folder_not_found("media", season_folder)
-        return None
-
-    # Create output folder for processed media
-    ensure_dir_exists(PROCESSED_MEDIA_DIR)
-
     # Get season info from entry.json
     entry_json_path = os.path.join(season_folder, ENTRY_JSON_FILENAME)
     entry_info = extract_info_from_entry_json(entry_json_path)
 
     title = entry_info.get('title', os.path.basename(season_folder))
     episode_tag = entry_info.get('episode_tag', '')
+
+    # Get the preferred video quality folder name
+    prefered_video_quality = entry_info.get('prefered_video_quality')
+    if not prefered_video_quality:
+        message.error(
+            f"Could not determine video quality folder for {season_folder}")
+        return None
+
+    # Locate the media folder using the preferred quality
+    media_folder = os.path.join(season_folder, prefered_video_quality)
+    if not os.path.exists(media_folder):
+        message.folder_not_found(
+            f"video quality folder ({prefered_video_quality})", season_folder)
+        return None
+
+    # Create output folder for processed media
+    ensure_dir_exists(PROCESSED_MEDIA_DIR)
 
     # Format filename in TV show style
     tv_style_filename = format_tv_style_filename(
@@ -199,7 +208,8 @@ def process_media_files(season_folder, season_number=1):
         return {
             'audio': output_audio_path,
             'video': output_video_path,
-            'metadata': metadata_path
+            'metadata': metadata_path,
+            'quality': prefered_video_quality
         }
 
     except Exception as e:
@@ -252,38 +262,6 @@ def process_all_seasons(bilibili_folder, season_number=1):
         message.folder_not_found("Bilibili video", "")
         return
 
-    # Function to check if a folder is a valid season folder
-    def is_valid_season_folder(folder_path):
-        has_entry_json = os.path.exists(
-            os.path.join(folder_path, ENTRY_JSON_FILENAME))
-        has_media_folder = os.path.exists(
-            os.path.join(folder_path, MEDIA_FOLDER_NAME))
-        has_subtitle_folder = os.path.exists(
-            os.path.join(folder_path, SUBTITLE_FOLDER_NAME))
-
-        return has_entry_json or has_media_folder or has_subtitle_folder
-
-    # Function to recursively search for season folders
-    def find_season_folders(parent_folder, max_depth=3, current_depth=0):
-        if current_depth > max_depth:
-            return []
-
-        season_folders = []
-
-        # Get all subfolders
-        subfolders = [os.path.join(parent_folder, f) for f in os.listdir(parent_folder)
-                      if os.path.isdir(os.path.join(parent_folder, f))]
-
-        for folder in subfolders:
-            if is_valid_season_folder(folder):
-                season_folders.append(folder)
-            else:
-                # If not a valid season folder, search inside it (recursively)
-                season_folders.extend(find_season_folders(
-                    folder, max_depth, current_depth + 1))
-
-        return season_folders
-
     # Find all season folders recursively
     season_folders = find_season_folders(bilibili_folder)
 
@@ -299,6 +277,83 @@ def process_all_seasons(bilibili_folder, season_number=1):
         process_season_folder(season_folder, season_number)
 
 
+def find_season_folders(parent_folder, max_depth=3, current_depth=0):
+    """
+    Recursively find anime season folders in the parent folder.
+
+    Args:
+        parent_folder: Parent folder to search
+        max_depth: Maximum depth to search
+        current_depth: Current depth in the search
+    
+    Returns:
+        List of valid season folders
+    """
+    if current_depth > max_depth:
+        return []
+
+    season_folders = []
+
+    # Get all subfolders
+    subfolders = [os.path.join(parent_folder, f) for f in os.listdir(parent_folder)
+                  if os.path.isdir(os.path.join(parent_folder, f))]
+
+    for folder in subfolders:
+        if is_valid_season_folder(folder):
+            season_folders.append(folder)
+        else:
+            # If not a valid season folder, search inside it (recursively)
+            season_folders.extend(find_season_folders(
+                folder, max_depth, current_depth + 1))
+
+    return season_folders
+
+
+def is_valid_season_folder(folder_path):
+    """
+    Check if a folder is a valid anime season folder.
+
+    Args:
+        folder_path: Path to check
+
+    Returns:
+        True if it's a valid season folder, False otherwise
+    """
+    # Check for entry.json
+    has_entry_json = os.path.exists(
+        os.path.join(folder_path, ENTRY_JSON_FILENAME))
+
+    # Check for subtitle folder
+    has_subtitle_folder = os.path.exists(
+        os.path.join(folder_path, SUBTITLE_FOLDER_NAME))
+
+    # Check for quality folders
+    has_media_folder = False
+
+    # If we have entry.json, try to extract preferred quality
+    if has_entry_json:
+        entry_info = extract_info_from_entry_json(
+            os.path.join(folder_path, ENTRY_JSON_FILENAME))
+        prefered_video_quality = entry_info.get('prefered_video_quality')
+
+        # Check if the preferred quality folder exists
+        if prefered_video_quality and os.path.exists(os.path.join(folder_path, prefered_video_quality)):
+            has_media_folder = True
+
+    # If no preferred quality found, check for any potential media folders
+    if not has_media_folder:
+        for item in os.listdir(folder_path):
+            item_path = os.path.join(folder_path, item)
+            if os.path.isdir(item_path):
+                # Check if this folder contains media files
+                if (os.path.exists(os.path.join(item_path, AUDIO_FILENAME)) and
+                        os.path.exists(os.path.join(item_path, VIDEO_FILENAME))):
+                    has_media_folder = True
+                    break
+
+    return has_entry_json or has_media_folder or has_subtitle_folder
+
+
 def get_season_number():
     """Get season number from user input."""
     while True:
@@ -311,4 +366,3 @@ def get_season_number():
                 message.info("Please enter a number between 1 and 99.")
         except ValueError:
             message.error("Please enter a valid number.")
-

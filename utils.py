@@ -94,7 +94,8 @@ def extract_info_from_entry_json(entry_json_path):
         'title': os.path.basename(os.path.dirname(entry_json_path)),
         'episode_tag': '',
         'episode_id': '',
-        'subtitle_url': ''
+        'subtitle_url': '',
+        'prefered_video_quality': ''
     }
 
     if not os.path.exists(entry_json_path):
@@ -122,6 +123,9 @@ def extract_info_from_entry_json(entry_json_path):
                 if subtitle.get('key') == 'en':
                     info['subtitle_url'] = subtitle.get('url', '')
                     break
+        # Extract preferred video quality
+        if 'prefered_video_quality' in data:
+            info['prefered_video_quality'] = str(data['prefered_video_quality'])
 
     except Exception as e:
         print(f"Error reading entry.json: {str(e)}")

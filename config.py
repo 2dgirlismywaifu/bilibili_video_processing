@@ -6,7 +6,6 @@ BILIBILI_VIDEO_FOLDER = os.path.join(BASE_PATH, "bilibili_video")
 PROCESSED_MEDIA_DIR = os.path.join(BASE_PATH, "processed_media")
 
 # Folder structure constants
-MEDIA_FOLDER_NAME = "112"  # Folder containing audio.m4s and video.m4s
 SUBTITLE_FOLDER_NAME = "vi"  # Folder containing subtitle files
 ENTRY_JSON_FILENAME = "entry.json"
 
