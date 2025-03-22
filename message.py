@@ -78,7 +78,7 @@ def media_copied(title, output_dir):
 # Season processing messages
 def season_processing(season_name):
     """Display a message for processing a season."""
-    processing(f"Season: {season_name}")
+    processing(f"Episode folder: {season_name}")
 
 
 # JSON to SRT conversion messages

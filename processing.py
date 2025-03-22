@@ -292,7 +292,7 @@ def process_all_seasons(bilibili_folder, season_number=1):
             f"No valid anime season folders found in {bilibili_folder}")
         return
 
-    message.info(f"Found {len(season_folders)} anime season folders")
+    message.info(f"Found {len(season_folders)} anime episode folders")
 
     # Process each season folder
     for season_folder in season_folders:
