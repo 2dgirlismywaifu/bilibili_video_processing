@@ -27,93 +27,64 @@ def detect_gpu():
         dict: Hardware acceleration details with type and options
     """
     global HW_ACCEL
-
     system = platform.system()
-
-    # Check for NVIDIA GPU
-    try:
-        if system == 'Windows':
-            nvidia_smi = subprocess.run(['nvidia-smi', '-L'],
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE,
-                                        text=True,
-                                        timeout=5)
-            if nvidia_smi.returncode == 0 and "GPU" in nvidia_smi.stdout:
-                HW_ACCEL['type'] = 'nvidia'
-                HW_ACCEL['hwaccel'] = 'cuda'
-                message.info("NVIDIA GPU detected - using CUDA hardware acceleration")
-                return HW_ACCEL
-        else:
-            # Linux-specific check
-            nvidia_check = subprocess.run(['lspci'],
-                                          stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE,
-                                          text=True,
-                                          timeout=5)
-            if nvidia_check.returncode == 0 and "NVIDIA" in nvidia_check.stdout:
-                HW_ACCEL['type'] = 'nvidia'
-                HW_ACCEL['hwaccel'] = 'cuda'
-                message.info("NVIDIA GPU detected - using CUDA hardware acceleration")
-                return HW_ACCEL
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-
-    # Check for AMD GPU
-    try:
-        if system == 'Windows':
-            wmic_output = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.PIPE,
-                                         text=True,
-                                         timeout=5)
-            if wmic_output.returncode == 0 and ("AMD" in wmic_output.stdout or "Radeon" in wmic_output.stdout):
-                HW_ACCEL['type'] = 'amd'
-                HW_ACCEL['hwaccel'] = 'amf'
-                message.info("AMD GPU detected - using AMF hardware acceleration")
-                return HW_ACCEL
-        else:
-            # Linux-specific check
-            amd_check = subprocess.run(['lspci'],
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE,
-                                       text=True,
-                                       timeout=5)
-            if amd_check.returncode == 0 and ("AMD" in amd_check.stdout or "Radeon" in amd_check.stdout):
-                HW_ACCEL['type'] = 'amd'
-                HW_ACCEL['hwaccel'] = 'amf'
-                message.info("AMD GPU detected - using AMF hardware acceleration")
-                return HW_ACCEL
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-
-    # Check for Intel GPU
-    try:
-        if system == 'Windows':
-            wmic_output = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.PIPE,
-                                         text=True,
-                                         timeout=5)
-            if wmic_output.returncode == 0 and ("Intel" in wmic_output.stdout or "UHD" in wmic_output.stdout or "HD Graphics" in wmic_output.stdout):
-                HW_ACCEL['type'] = 'intel'
-                HW_ACCEL['hwaccel'] = 'qsv'
-                message.info("Intel GPU detected - using QuickSync hardware acceleration")
-                return HW_ACCEL
-        else:
-            # Linux-specific check
-            intel_check = subprocess.run(['lspci'],
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.PIPE,
-                                         text=True,
-                                         timeout=5)
-            if intel_check.returncode == 0 and "Intel" in intel_check.stdout:
-                HW_ACCEL['type'] = 'intel'
-                HW_ACCEL['hwaccel'] = 'qsv'
-                message.info("Intel GPU detected - using QuickSync hardware acceleration")
-                return HW_ACCEL
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-
+    
+    # Helper function to check for specific GPU type
+    def check_gpu(gpu_type, hwaccel, detection_configs):
+        """Check if a specific GPU type is available"""
+        for config in detection_configs:
+            platform_type, command, search_terms = config
+            
+            if platform_type != 'all' and platform_type != system:
+                continue
+                
+            try:
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=5
+                )
+                
+                # Check if any of the search terms are in the output
+                if result.returncode == 0 and any(term in result.stdout for term in search_terms):
+                    HW_ACCEL['type'] = gpu_type
+                    HW_ACCEL['hwaccel'] = hwaccel
+                    message.info(f"{gpu_type.upper()} GPU detected - using {hwaccel.upper()} hardware acceleration")
+                    return True
+            except (subprocess.SubprocessError, FileNotFoundError):
+                pass
+                
+        return False
+    
+    # GPU detection configurations: [(platform, command, search_terms), ...]
+    gpu_configs = [
+        # NVIDIA detection
+        ('nvidia', 'cuda', [
+            ('Windows', ['nvidia-smi', '-L'], ['GPU']),
+            ('Linux', ['lspci'], ['NVIDIA'])
+        ]),
+        
+        # AMD detection
+        ('amd', 'amf', [
+            ('Windows', ['wmic', 'path', 'win32_VideoController', 'get', 'name'], ['AMD', 'Radeon']),
+            ('Linux', ['lspci'], ['AMD', 'Radeon'])
+        ]),
+        
+        # Intel detection
+        ('intel', 'qsv', [
+            ('Windows', ['wmic', 'path', 'win32_VideoController', 'get', 'name'], ['Intel', 'UHD', 'HD Graphics']),
+            ('Linux', ['lspci'], ['Intel'])
+        ])
+    ]
+    
+    # Try each GPU type in order of preference
+    for gpu_type, hwaccel, configs in gpu_configs:
+        if check_gpu(gpu_type, hwaccel, configs):
+            return HW_ACCEL
+    
+    # If no GPU detected, default to CPU
     message.info("No GPU detected or suitable hardware acceleration found - using CPU")
     return HW_ACCEL
 
