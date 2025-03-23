@@ -75,7 +75,7 @@ def create_safe_filename(title):
         return "Unknown"
     safe_title = "".join(c for c in title if c.isalnum()
                          or c in (' ', '_', '-')).strip()
-    safe_title = safe_title.replace(' ', '_')
+    #safe_title = safe_title.replace(' ', '_')
     return safe_title
 
 
@@ -191,10 +191,12 @@ def copy_file_with_new_name(source_path, dest_dir, new_filename):
         return None
 
 
-def create_metadata_file(output_path, title, season_number, episode_tag, audio_path, video_path, source_folder):
+def create_metadata_file(output_path, title, season_number, episode_tag, 
+                        audio_path, video_path, source_folder, mkv_path=None, 
+                        subtitle_paths=None):
     """
     Create a metadata text file with episode information.
-
+    
     Args:
         output_path: Path to write the metadata file
         title: Episode title
@@ -203,7 +205,9 @@ def create_metadata_file(output_path, title, season_number, episode_tag, audio_p
         audio_path: Path to the audio file
         video_path: Path to the video file
         source_folder: Original source folder
-
+        mkv_path: Path to the MKV file (optional)
+        subtitle_paths: Dictionary of subtitle paths by language code (optional)
+        
     Returns:
         Path to the metadata file or None if creation failed
     """
@@ -214,6 +218,15 @@ def create_metadata_file(output_path, title, season_number, episode_tag, audio_p
             f.write(f"Episode: {episode_tag}\n")
             f.write(f"Audio file: {audio_path}\n")
             f.write(f"Video file: {video_path}\n")
+            
+            if mkv_path:
+                f.write(f"MKV file: {mkv_path}\n")
+                
+            if subtitle_paths and isinstance(subtitle_paths, dict):
+                f.write("Subtitles:\n")
+                for lang, path in subtitle_paths.items():
+                    f.write(f"  {lang}: {path}\n")
+                    
             f.write(f"Original folder: {source_folder}\n")
         return output_path
     except Exception as e:

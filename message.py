@@ -90,3 +90,16 @@ def json_to_srt_error(file_path, error_msg):
 def json_to_srt_summary(count):
     """Display a summary of JSON to SRT conversion."""
     info(f"Processed {count} JSON files to SRT format.")
+
+
+def mkv_creation_started(title):
+    """Display a message when MKV creation starts."""
+    info(f"Creating MKV file for {title}...")
+
+def mkv_creation_success(path):
+    """Display a message when MKV creation completes."""
+    success(f"Created MKV file: {path}")
+
+def mkv_creation_error(error_text):
+    """Display MKV creation error message."""
+    error(f"Error creating MKV file: {error_text}")
