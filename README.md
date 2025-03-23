@@ -16,30 +16,34 @@ A tool to process and organize anime content downloaded from the `Bilibili` Glob
 ## Requirements
 
 - Python 3.12 or higher
-- `requests` library
+- `requests`, `ffmpeg-python` library
+- FFMPEG has been assigned a BIN path in the system.
+    - In Windows, it assign in Environment Variable
+    - In Linux, MacOS just install it and it will available in SHELL
 
 ## Installation
 
 1. Clone this repository or download the source code
 2. Install the required dependencies:
 
-```sh
-pip install requests
-```
+    ```sh
+    pip install requests ffmpeg-python
+    ```
 
 ## Usage
 
-Run the application with:
+- Run the application with:
 
-```sh
-python app.py
-```
+    ```sh
+    python app.py
+    ```
 
-The script will prompt you to enter a season number for the anime. This helps organize your files in a TV show format (e.g., "{Anime Title} - S01E02").
+- The script will prompt you to enter a season number for the anime. This helps organize your files in a TV show format (e.g., "{Anime Title} - S01E02").
 
 ### Folder Structure
 
-The application expects the following folder structure from `Bilibili` downloads:
+- Create `bilibili_video` folder manually in main repository folder
+- The application expects the following folder structure from `Bilibili` downloads:
 
 ```
 bilibili_video/
@@ -61,7 +65,7 @@ bilibili_video/
 │   └── ...
 ```
 
-After processing, files will be organized in the `processed_media` directory with a consistent naming scheme:
+- After processing, files will be organized in the `processed_media` directory with a consistent naming scheme:
 
 ```
 processed_media/
@@ -83,7 +87,8 @@ processed_media/
 
 ## Notes
 
-- This tool does not handle video multiplexing. You will need to use an external tool to combine the final `.mkv` file
+- ~~This tool does not handle video multiplexing. You will need to use an external tool to combine the final `.mkv` file~~
+- This tool not support handle multiple `Anime Season` folder
 - The season number is used for organizing files and does not affect the content itself.
 - This is my personal tools so i only need Vietnamese and English version of subtitle.
 - Feel free fork this repository and change the code if it necessary
