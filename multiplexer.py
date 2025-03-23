@@ -123,15 +123,28 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
         # Add input files
         command.extend(['-i', video_path, '-i', audio_path])
 
+        # Track valid subtitle files and their languages
+        valid_subtitles = []
+
         # Add subtitle inputs
-        subtitle_idx = 2  # Start after video and audio
         if subtitle_paths and isinstance(subtitle_paths, dict):
             for lang_code, sub_path in subtitle_paths.items():
                 if os.path.exists(sub_path):
                     command.extend(['-i', sub_path])
-                    subtitle_idx += 1
+                    valid_subtitles.append((lang_code, sub_path))
                 else:
                     message.warning(f"Subtitle file not found: {sub_path}")
+
+        # Map streams to output
+        command.append('-map')
+        command.append('0:v')  # Map video from first input
+        command.append('-map')
+        command.append('1:a')  # Map audio from second input
+
+        # Map all subtitle streams
+        for i in range(len(valid_subtitles)):
+            command.append('-map')
+            command.append(f'{i+2}:s')  # Map subtitles from their respective inputs
 
         # Set codec options
         command.extend([
@@ -141,15 +154,11 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
         ])
 
         # Add subtitle metadata
-        subtitle_idx = 0
-        if subtitle_paths and isinstance(subtitle_paths, dict):
-            for lang_code, sub_path in subtitle_paths.items():
-                if os.path.exists(sub_path):
-                    command.extend([
-                        f'-metadata:s:s:{subtitle_idx}', f'language={lang_code}',
-                        f'-metadata:s:s:{subtitle_idx}', f'title={lang_code.upper()} Subtitle'
-                    ])
-                    subtitle_idx += 1
+        for i, (lang_code, _) in enumerate(valid_subtitles):
+            command.extend([
+                f'-metadata:s:s:{i}', f'language={lang_code}',
+                f'-metadata:s:s:{i}', f'title={lang_code.upper()} Subtitle'
+            ])
 
         # Add output file
         command.append(output_mkv_path)
@@ -158,6 +167,9 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
         message.mkv_creation_started(
             title or os.path.basename(output_mkv_path))
         message.info(f"Using {HW_ACCEL['type'].upper()} for multiplexing")
+        
+        # Debug: Print the full command
+        message.info(f"FFmpeg command: {' '.join(command)}")
 
         # Run ffmpeg command
         result = subprocess.run(
@@ -169,6 +181,7 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
 
         if result.returncode == 0 and os.path.exists(output_mkv_path):
             message.mkv_creation_success(output_mkv_path)
+            message.info(f"Added {len(valid_subtitles)} subtitle streams: {', '.join(lang for lang, _ in valid_subtitles)}")
             return output_mkv_path
         else:
             message.error(f"FFmpeg error: {result.stderr}")
@@ -177,14 +190,43 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
             if HW_ACCEL['type'] != 'cpu':
                 message.warning(
                     "Hardware acceleration failed. Retrying with CPU...")
-                # Basic command without hardware acceleration
-                basic_command = [
-                    'ffmpeg', '-y',
-                    '-i', video_path,
-                    '-i', audio_path,
-                    '-c', 'copy',
-                    output_mkv_path
-                ]
+                
+                # Build a simpler command still including all subtitles
+                basic_command = ['ffmpeg', '-y']
+                
+                # Add all inputs
+                basic_command.extend(['-i', video_path, '-i', audio_path])
+                
+                # Add subtitle inputs
+                for _, sub_path in valid_subtitles:
+                    basic_command.extend(['-i', sub_path])
+                
+                # Map streams
+                basic_command.append('-map')
+                basic_command.append('0:v')  # Map video
+                basic_command.append('-map')
+                basic_command.append('1:a')  # Map audio
+                
+                # Map all subtitle streams
+                for i in range(len(valid_subtitles)):
+                    basic_command.append('-map')
+                    basic_command.append(f'{i+2}:s')  # Map subtitles
+                
+                # Set codec options
+                basic_command.extend(['-c', 'copy'])
+                
+                # Add subtitle metadata
+                for i, (lang_code, _) in enumerate(valid_subtitles):
+                    basic_command.extend([
+                        f'-metadata:s:s:{i}', f'language={lang_code}',
+                        f'-metadata:s:s:{i}', f'title={lang_code.upper()} Subtitle'
+                    ])
+                
+                # Add output file
+                basic_command.append(output_mkv_path)
+                
+                # Debug: Print the full command
+                message.info(f"Basic FFmpeg command: {' '.join(basic_command)}")
 
                 basic_result = subprocess.run(
                     basic_command,
@@ -195,6 +237,7 @@ def multiplex_to_mkv(video_path, audio_path, output_mkv_path, subtitle_paths=Non
 
                 if basic_result.returncode == 0 and os.path.exists(output_mkv_path):
                     message.mkv_creation_success(output_mkv_path)
+                    message.info(f"Added {len(valid_subtitles)} subtitle streams: {', '.join(lang for lang, _ in valid_subtitles)}")
                     return output_mkv_path
                 else:
                     message.error(f"Basic FFmpeg error: {basic_result.stderr}")
