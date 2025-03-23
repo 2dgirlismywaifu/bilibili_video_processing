@@ -443,15 +443,3 @@ def get_season_number():
                 print("Please enter a number between 1 and 99.")
         except ValueError:
             print("Please enter a valid number.")
-
-
-if __name__ == "__main__":
-    # Get season number from user
-    season_number = get_season_number()
-    message.info(f"Processing anime as Season {season_number}")
-
-    # Process all seasons with the specified season number
-    process_all_seasons(BILIBILI_VIDEO_FOLDER, season_number)
-
-    # Clear cache when done
-    clear_entry_info_cache()
