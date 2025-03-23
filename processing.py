@@ -14,6 +14,9 @@ from jsonToSRT import convert_json_to_srt
 from multiplexer import multiplex_to_mkv
 
 
+_entry_info_cache = {}
+
+
 def download_en_subtitle(entry_info, season_number, output_base_filename=None):
     """
     Download English subtitle from Bilibili and convert to SRT format.
@@ -71,7 +74,7 @@ def download_en_subtitle(entry_info, season_number, output_base_filename=None):
 
 def process_local_subtitle(season_folder, entry_info, season_number, output_base_filename=None):
     """
-    Process local subtitle files found in the vi folder.
+    Process local subtitle files found in the subtitle folder specified in entry.json.
 
     Args:
         season_folder: Path to the season folder
@@ -85,9 +88,17 @@ def process_local_subtitle(season_folder, entry_info, season_number, output_base
     title = entry_info.get('title', os.path.basename(season_folder))
     episode_tag = entry_info.get('episode_tag', '')
 
-    vi_folder = os.path.join(season_folder, SUBTITLE_FOLDER_NAME)
-    if not os.path.exists(vi_folder):
-        message.folder_not_found("subtitle", season_folder)
+    # Get the local subtitle folder name from entry_info
+    local_subtitle_folder_name = entry_info.get('local_subtitle_folder', '')
+    subtitle_lang = local_subtitle_folder_name
+
+    # Build the full path to the subtitle folder
+    local_subtitle_folder = os.path.join(
+        season_folder, local_subtitle_folder_name)
+
+    if not os.path.exists(local_subtitle_folder):
+        message.folder_not_found(
+            f"subtitle ({local_subtitle_folder_name})", season_folder)
         return {}
 
     # Format base filename
@@ -103,26 +114,27 @@ def process_local_subtitle(season_folder, entry_info, season_number, output_base
     # Process subtitle files
     for extension in (JSON_EXTENSION, ASS_EXTENSION):
         subtitle_files = [f for f in os.listdir(
-            vi_folder) if f.endswith(extension)]
+            local_subtitle_folder) if f.endswith(extension)]
         for subtitle_file in subtitle_files:
-            source_path = os.path.join(vi_folder, subtitle_file)
-            dest_filename = f"{output_base_filename}.vi{extension}"
+            source_path = os.path.join(local_subtitle_folder, subtitle_file)
+            dest_filename = f"{output_base_filename}.{subtitle_lang}{extension}"
             output_path = os.path.join(PROCESSED_MEDIA_DIR, dest_filename)
 
             # Copy if it doesn't exist
             if not os.path.exists(output_path):
                 copy_file_with_new_name(
                     source_path, PROCESSED_MEDIA_DIR, dest_filename)
-                message.info(f"Copied {extension} subtitle: {output_path}")
+                message.info(
+                    f"Copied {extension} subtitle from {local_subtitle_folder_name}: {output_path}")
 
             # Convert JSON to SRT
             if extension == JSON_EXTENSION:
                 srt_path = output_path.replace(JSON_EXTENSION, SRT_EXTENSION)
                 if convert_json_to_srt(output_path, srt_path):
                     message.subtitle_convert_success(srt_path)
-                    subtitle_paths['vi'] = srt_path
+                    subtitle_paths[subtitle_lang] = srt_path
             else:
-                subtitle_paths['vi'] = output_path
+                subtitle_paths[subtitle_lang] = output_path
 
     return subtitle_paths
 
@@ -151,21 +163,19 @@ def find_subtitle_files(base_filename):
     return subtitle_paths
 
 
-def process_media_files(season_folder, season_number=1):
+def process_media_files(season_folder, entry_info, season_number=1):
     """
     Process media files and create MKV with video, audio, and subtitles.
 
     Args:
         season_folder: Path to the season folder
+        entry_info: Dictionary with episode information (pre-loaded)
         season_number: Season number for TV style naming
 
     Returns:
         Dictionary with paths to processed files or None if processing failed
     """
-    # Get basic information
-    entry_json_path = os.path.join(season_folder, ENTRY_JSON_FILENAME)
-    entry_info = extract_info_from_entry_json(entry_json_path)
-
+    # No need to load entry_info again!
     title = entry_info.get('title', os.path.basename(season_folder))
     episode_tag = entry_info.get('episode_tag', '')
     prefered_video_quality = entry_info.get('prefered_video_quality')
@@ -263,20 +273,39 @@ def is_valid_season_folder(folder_path):
     Returns:
         True if it's a valid season folder, False otherwise
     """
+    global _entry_info_cache
+
     # Check for entry.json
-    has_entry_json = os.path.exists(
-        os.path.join(folder_path, ENTRY_JSON_FILENAME))
-    has_subtitle_folder = os.path.exists(
-        os.path.join(folder_path, SUBTITLE_FOLDER_NAME))
+    entry_json_path = os.path.join(folder_path, ENTRY_JSON_FILENAME)
+    has_entry_json = os.path.exists(entry_json_path)
+
+    # Get info from entry.json if available, using cache
+    entry_info = None
+    if has_entry_json:
+        if entry_json_path in _entry_info_cache:
+            entry_info = _entry_info_cache[entry_json_path]
+        else:
+            entry_info = extract_info_from_entry_json(entry_json_path)
+            _entry_info_cache[entry_json_path] = entry_info
+
+    # Check for subtitle folder using the name from entry.json
+    has_subtitle_folder = False
+    if entry_info and entry_info.get('local_subtitle_folder'):
+        subtitle_folder = os.path.join(
+            folder_path, entry_info['local_subtitle_folder'])
+        has_subtitle_folder = os.path.exists(subtitle_folder)
+    else:
+        # Fallback to check common subtitle folder names
+        for common_folder in ['vi', 'subtitle', 'subtitles', 'sub', 'subs']:
+            if os.path.exists(os.path.join(folder_path, common_folder)):
+                has_subtitle_folder = True
+                break
 
     # Check for quality folders based on entry.json
     has_media_folder = False
-    if has_entry_json:
-        entry_info = extract_info_from_entry_json(
-            os.path.join(folder_path, ENTRY_JSON_FILENAME))
+    if entry_info and entry_info.get('prefered_video_quality'):
         prefered_video_quality = entry_info.get('prefered_video_quality')
-
-        if prefered_video_quality and os.path.exists(os.path.join(folder_path, prefered_video_quality)):
+        if os.path.exists(os.path.join(folder_path, prefered_video_quality)):
             has_media_folder = True
 
     # Check for any folder containing media files
@@ -292,6 +321,12 @@ def is_valid_season_folder(folder_path):
     return has_entry_json or has_media_folder or has_subtitle_folder
 
 
+def clear_entry_info_cache():
+    """Clear the entry.json info cache to free memory."""
+    global _entry_info_cache
+    _entry_info_cache.clear()
+
+
 def process_season_folder(season_folder, season_number=1):
     """
     Process a single anime season folder.
@@ -305,12 +340,13 @@ def process_season_folder(season_folder, season_number=1):
     """
     message.season_processing(os.path.basename(season_folder))
 
-    # Get season info
+    # Get season info - THIS IS NOW LOADED ONLY ONCE PER SEASON
     entry_json_path = os.path.join(season_folder, ENTRY_JSON_FILENAME)
     if not os.path.exists(entry_json_path):
         message.file_not_found(ENTRY_JSON_FILENAME, season_folder)
         return False
 
+    # Extract entry info once and reuse it
     entry_info = extract_info_from_entry_json(entry_json_path)
 
     # Format standard filename
@@ -319,11 +355,11 @@ def process_season_folder(season_folder, season_number=1):
     tv_style_filename = format_tv_style_filename(
         title, season_number, episode_tag)
 
-    # Process all content
+    # Process all content with the shared entry_info
     download_en_subtitle(entry_info, season_number, tv_style_filename)
     process_local_subtitle(season_folder, entry_info,
                            season_number, tv_style_filename)
-    process_media_files(season_folder, season_number)
+    process_media_files(season_folder, entry_info, season_number)
 
     return True
 
@@ -375,7 +411,7 @@ def process_all_seasons(bilibili_folder, season_number=1):
         message.folder_not_found("Bilibili video", "")
         return
 
-    # Find all season folders recursively
+    # Find all season folders recursively with optimized entry.json loading
     season_folders = find_season_folders(bilibili_folder)
 
     if not season_folders:
@@ -416,3 +452,6 @@ if __name__ == "__main__":
 
     # Process all seasons with the specified season number
     process_all_seasons(BILIBILI_VIDEO_FOLDER, season_number)
+
+    # Clear cache when done
+    clear_entry_info_cache()

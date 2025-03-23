@@ -75,7 +75,7 @@ def create_safe_filename(title):
         return "Unknown"
     safe_title = "".join(c for c in title if c.isalnum()
                          or c in (' ', '_', '-')).strip()
-    #safe_title = safe_title.replace(' ', '_')
+    # safe_title = safe_title.replace(' ', '_')
     return safe_title
 
 
@@ -94,6 +94,7 @@ def extract_info_from_entry_json(entry_json_path):
         'title': os.path.basename(os.path.dirname(entry_json_path)),
         'episode_tag': '',
         'episode_id': '',
+        'local_subtitle_folder': '',
         'subtitle_url': '',
         'prefered_video_quality': ''
     }
@@ -116,16 +117,26 @@ def extract_info_from_entry_json(entry_json_path):
             if 'episode_id' in ep_data:
                 info['episode_id'] = ep_data['episode_id']
 
-        # Extract subtitle URL
-        if 'danmakuSubtitleReply' in data and 'subtitles' in data['danmakuSubtitleReply']:
-            subtitle_list = data['danmakuSubtitleReply']['subtitles']
-            for subtitle in subtitle_list:
-                if subtitle.get('key') == 'en':
-                    info['subtitle_url'] = subtitle.get('url', '')
-                    break
+        # Extract subtitle information
+        if 'danmakuSubtitleReply' in data:
+            danmaku = data['danmakuSubtitleReply']
+
+            # Extract local subtitle folder name
+            if 'suggestKey' in danmaku:
+                info['local_subtitle_folder'] = danmaku['suggestKey']
+
+            # Extract subtitle URL
+            if 'subtitles' in danmaku:
+                subtitle_list = data['danmakuSubtitleReply']['subtitles']
+                for subtitle in subtitle_list:
+                    if subtitle.get('key') == 'en':
+                        info['subtitle_url'] = subtitle.get('url', '')
+                        break
+
         # Extract preferred video quality
         if 'prefered_video_quality' in data:
-            info['prefered_video_quality'] = str(data['prefered_video_quality'])
+            info['prefered_video_quality'] = str(
+                data['prefered_video_quality'])
 
     except Exception as e:
         print(f"Error reading entry.json: {str(e)}")
@@ -191,12 +202,12 @@ def copy_file_with_new_name(source_path, dest_dir, new_filename):
         return None
 
 
-def create_metadata_file(output_path, title, season_number, episode_tag, 
-                        audio_path, video_path, source_folder, mkv_path=None, 
-                        subtitle_paths=None):
+def create_metadata_file(output_path, title, season_number, episode_tag,
+                         audio_path, video_path, source_folder, mkv_path=None,
+                         subtitle_paths=None):
     """
     Create a metadata text file with episode information.
-    
+
     Args:
         output_path: Path to write the metadata file
         title: Episode title
@@ -207,7 +218,7 @@ def create_metadata_file(output_path, title, season_number, episode_tag,
         source_folder: Original source folder
         mkv_path: Path to the MKV file (optional)
         subtitle_paths: Dictionary of subtitle paths by language code (optional)
-        
+
     Returns:
         Path to the metadata file or None if creation failed
     """
@@ -218,15 +229,15 @@ def create_metadata_file(output_path, title, season_number, episode_tag,
             f.write(f"Episode: {episode_tag}\n")
             f.write(f"Audio file: {audio_path}\n")
             f.write(f"Video file: {video_path}\n")
-            
+
             if mkv_path:
                 f.write(f"MKV file: {mkv_path}\n")
-                
+
             if subtitle_paths and isinstance(subtitle_paths, dict):
                 f.write("Subtitles:\n")
                 for lang, path in subtitle_paths.items():
                     f.write(f"  {lang}: {path}\n")
-                    
+
             f.write(f"Original folder: {source_folder}\n")
         return output_path
     except Exception as e:
